@@ -43,6 +43,6 @@ public class MainActivity extends AppCompatActivity {
         resultImg.setPixels(resultInt, 0, w, 0, 0, w, h);
 
         imageView.setImageBitmap(resultImg);
-
+        
     }
 }
