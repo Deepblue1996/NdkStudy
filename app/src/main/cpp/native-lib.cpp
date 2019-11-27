@@ -36,7 +36,7 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_bitmap2Grey(JNIEnv *env, jclass, jintArr
     // ----------------------------------------
 
     // 进行平滑操作，可以使用GaussianBlur()、blur()、medianBlur()或bilateralFilter()
-    GaussianBlur(imgData, imgData, cv::Size(51, 51), 20, 20);
+//    GaussianBlur(imgData, imgData, cv::Size(51, 51), 20, 20);
 
     // ----------------------------------------
 /*
@@ -59,7 +59,6 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_bitmap2Grey(JNIEnv *env, jclass, jintArr
 */
 
     // ----------------------------------------
-/*
 
     //变量定义
     Mat src_gray, dst, abs_dst;
@@ -80,18 +79,25 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_bitmap2Grey(JNIEnv *env, jclass, jintArr
     //将dstImage内所有元素为0
     dst2 = Scalar::all(0);
 
-    //使用Canny算子输出的边缘图，g_cannyDetectedEdges作为掩码，来将原图g_srcImage拷贝到目标图g_dstImage中
+    //使用Laplacian算子输出的边缘图，abs_dst作为掩码，来将原图imgData拷贝到目标图dst2中
     imgData.copyTo(dst2, abs_dst);
-*/
+
+    int size = w * h;
+
+    jint *re = (jint *) dst2.data;
+
+    jintArray result = env->NewIntArray(size);
+    env->SetIntArrayRegion(result, 0, size, re);
+    env->ReleaseIntArrayElements(buf, srcBuf, 0);
 
     // ----------------------------------------
 
-    int size = w * h;
+/*    int size = w * h;
     // 申请数组
     jintArray result = env->NewIntArray(size);
     // 数据复制到result数组
     env->SetIntArrayRegion(result, 0, size, srcBuf);
     // 释放C数组资源
-    env->ReleaseIntArrayElements(buf, srcBuf, 0);
+    env->ReleaseIntArrayElements(buf, srcBuf, 0);*/
     return result;
 }
