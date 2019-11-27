@@ -11,5 +11,9 @@ public class JNIUtils {
      * A native method that is implemented by the 'native-lib' native library,
      * which is packaged with this application.
      */
-    public static native int[] bitmap2Grey(int[] pixels,int w,int h);
+    public static native int[] bitmap2Grey(int[] pixels, int w, int h);
+
+    public static native int[] findNumber(int[] pixels, int w, int h,
+                                          int[][] strLen
+    );
 }

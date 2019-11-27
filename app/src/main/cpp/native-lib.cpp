@@ -1,6 +1,9 @@
 #include <jni.h>
 #include <opencv2/opencv.hpp>
 #include <iostream>
+#include <opencv2/imgproc/types_c.h>
+#include "myRect.h"
+#include "WlAndroidLog.h"
 
 using namespace cv;
 using namespace std;
@@ -59,7 +62,7 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_bitmap2Grey(JNIEnv *env, jclass, jintArr
 */
 
     // ----------------------------------------
-
+/*
     //变量定义
     Mat src_gray, dst, abs_dst;
 
@@ -83,21 +86,168 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_bitmap2Grey(JNIEnv *env, jclass, jintArr
     imgData.copyTo(dst2, abs_dst);
 
     int size = w * h;
-
     jint *re = (jint *) dst2.data;
 
     jintArray result = env->NewIntArray(size);
     env->SetIntArrayRegion(result, 0, size, re);
     env->ReleaseIntArrayElements(buf, srcBuf, 0);
+    */
 
     // ----------------------------------------
 
-/*    int size = w * h;
+    //对图像进行处理，转化为灰度图然后再转为二值图
+    Mat grayImage;
+    cvtColor(imgData, grayImage, COLOR_BGRA2GRAY);
+    Mat binImage;
+    //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
+    //若为黑底白字则选择CV_THRESH_BINARY即可
+    threshold(grayImage, binImage, 100, 255, CV_THRESH_BINARY_INV);
+
+    cvtColor(binImage, imgData, COLOR_GRAY2BGRA);
+
+    // ----------------------------------------
+
+    int size = w * h;
     // 申请数组
     jintArray result = env->NewIntArray(size);
     // 数据复制到result数组
     env->SetIntArrayRegion(result, 0, size, srcBuf);
     // 释放C数组资源
-    env->ReleaseIntArrayElements(buf, srcBuf, 0);*/
+    env->ReleaseIntArrayElements(buf, srcBuf, 0);
+    return result;
+}
+
+//求图片的像素和
+int getPiexSum(Mat &image) {
+    int sum = 0;
+    for (int i = 0; i < image.cols; i++) {
+        for (int j = 0; j < image.rows; j++) {
+            sum += image.at<uchar>(j, i);
+        }
+    }
+    return sum;
+}
+
+extern "C" JNIEXPORT jintArray JNICALL
+Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jintArray buf,
+                                                   jint w, jint h,
+                                                   jobjectArray strLen) {
+
+    // 获得图片矩阵数组指针
+    jint *srcBuf = env->GetIntArrayElements(buf, JNI_FALSE);
+    if (srcBuf == nullptr) {
+        return nullptr;
+    }
+
+    // 根据指针创建一个Mat 四个颜色通道
+    Mat imgData(h, w, CV_8UC4, (unsigned char *) srcBuf);
+
+    //对图像进行处理，转化为灰度图然后再转为二值图
+    Mat grayImage;
+    cvtColor(imgData, grayImage, COLOR_BGRA2GRAY);
+    Mat binImage;
+    //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
+    //若为黑底白字则选择CV_THRESH_BINARY即可
+    threshold(grayImage, binImage, 100, 255, CV_THRESH_BINARY_INV);
+
+    //寻找轮廓，必须指定为寻找外部轮廓，不然一个数字可能有多个轮廓组成，比如4,6,8,9等数字
+    Mat conImage = Mat::zeros(binImage.size(), binImage.type());
+    vector<vector<Point>> contours;
+    vector<Vec4i> hierarchy;
+    //指定CV_RETR_EXTERNAL寻找数字的外轮廓
+    findContours(binImage, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+    //绘制轮廓
+    drawContours(conImage, contours, -1, 255);
+
+    //将每个数字，分离开，保存到容器中
+    vector<myRect> sort_rect;
+    for (int i = 0; i < contours.size(); i++) {
+        //boundingRect返回轮廓的外接矩阵
+        Rect tempRect = boundingRect(contours[i]);
+        sort_rect.emplace_back(tempRect);
+    }
+
+    //对矩形进行排序，因为轮廓的顺序不一定是数字真正的顺序
+    for (int i = 0; i < sort_rect.size(); i++) {
+        for (int j = i + 1; j < sort_rect.size(); j++) {
+            if (sort_rect[j] < sort_rect[i]) {
+                myRect temp = sort_rect[j];
+                sort_rect[j] = sort_rect[i];
+                sort_rect[i] = temp;
+            }
+        }
+    }
+
+    // 分割打印
+    for (int k = 0; k < sort_rect.size(); k++) {
+        LOGD("分割第%d个: x:%d y:%d w:%d h:%d", k, sort_rect[k].getRect().x, sort_rect[k].getRect().y,
+             sort_rect[k].getRect().width, sort_rect[k].getRect().height);
+    }
+
+    cvtColor(conImage, imgData, COLOR_GRAY2BGRA);
+
+    // ----------------------------------------
+
+    //加载模板
+    vector<Mat> myTemplate;
+
+    for (int c = 0; c < 10; c++) {
+
+        jintArray srcBufTemp = (jintArray)env->GetObjectArrayElement(strLen, c);
+
+        jint *dataTemp = env->GetIntArrayElements(srcBufTemp, JNI_FALSE);
+
+        Mat temp0(80, 80, CV_8UC4, (unsigned char *) dataTemp);
+        Mat grayImage0;
+        cvtColor(temp0, grayImage0, COLOR_BGRA2GRAY);
+
+        myTemplate.push_back(grayImage0);
+    }
+
+    //按顺序取出和分割数字
+    vector<Mat> myROI;
+    for (int i = 0; i < sort_rect.size(); i++) {
+        Mat ROI;
+        ROI = conImage(sort_rect[i].getRect());
+        Mat dstROI = Mat::zeros(myTemplate[0].size(), myTemplate[0].type());
+        resize(ROI, dstROI, myTemplate[0].size(), 0, 0, INTER_NEAREST);
+        myROI.push_back(dstROI);
+    }
+
+    //进行比较,将图片与模板相减，然后求全部像素和，和最小表示越相似，进而完成匹配
+    vector<int> seq;//顺序存放识别结果
+    for (int i = 0; i < myROI.size(); i++) {
+        Mat subImage;
+        int sum = 0;
+        int min = 100000;
+        int min_seq = 0;//记录最小的和对应的数字
+        for (int j = 0; j < 10; j++) {
+            //计算两个图片的差值
+            absdiff(myROI[i], myTemplate[j], subImage);
+            sum = getPiexSum(subImage);
+            if (sum < min) {
+                min = sum;
+                min_seq = j;
+            }
+        }
+        seq.push_back(min_seq);
+    }
+
+    //输出结果
+    LOGD("识别结果为:");
+    for (int i = 0; i < seq.size(); i++) {
+        LOGD("%d", seq[i]);
+    }
+
+    // ----------------------------------------
+
+    int size = w * h;
+    // 申请数组
+    jintArray result = env->NewIntArray(size);
+    // 数据复制到result数组
+    env->SetIntArrayRegion(result, 0, size, srcBuf);
+    // 释放C数组资源
+    env->ReleaseIntArrayElements(buf, srcBuf, 0);
+
     return result;
 }
