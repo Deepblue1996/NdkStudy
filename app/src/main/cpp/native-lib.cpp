@@ -3,7 +3,10 @@
 #include <iostream>
 #include <opencv2/imgproc/types_c.h>
 #include "myRect.h"
+#include "BitmapMatUtil.h"
 #include "WlAndroidLog.h"
+#include "BitmapMatUtil.h"
+#include <android/bitmap.h>
 
 using namespace cv;
 using namespace std;
@@ -128,19 +131,12 @@ int getPiexSum(Mat &image) {
     return sum;
 }
 
-extern "C" JNIEXPORT jintArray JNICALL
-Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jintArray buf,
-                                                   jint w, jint h,
-                                                   jobjectArray strLen) {
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject bitmap,
+                                                   jobjectArray bitmapBuf) {
 
-    // 获得图片矩阵数组指针
-    jint *srcBuf = env->GetIntArrayElements(buf, JNI_FALSE);
-    if (srcBuf == nullptr) {
-        return nullptr;
-    }
-
-    // 根据指针创建一个Mat 四个颜色通道
-    Mat imgData(h, w, CV_8UC4, (unsigned char *) srcBuf);
+    Mat imgData;//图片源矩阵
+    imgData = BitmapMatUtil::bitmap2Mat(env, bitmap);//图片源矩阵初始化
 
     //对图像进行处理，转化为灰度图然后再转为二值图
     Mat grayImage;
@@ -193,15 +189,20 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jintArra
 
     for (int c = 0; c < 10; c++) {
 
-        jintArray srcBufTemp = (jintArray)env->GetObjectArrayElement(strLen, c);
+        jobject srcBufTemp = env->GetObjectArrayElement(bitmapBuf, c);
 
-        jint *dataTemp = env->GetIntArrayElements(srcBufTemp, JNI_FALSE);
+        Mat temp0;//图片源矩阵
+        temp0 = BitmapMatUtil::bitmap2Mat(env, srcBufTemp);//图片源矩阵初始化
 
-        Mat temp0(80, 80, CV_8UC4, (unsigned char *) dataTemp);
         Mat grayImage0;
         cvtColor(temp0, grayImage0, COLOR_BGRA2GRAY);
 
-        myTemplate.push_back(grayImage0);
+        Mat binImage0;
+        //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
+        //若为黑底白字则选择CV_THRESH_BINARY即可
+        threshold(grayImage0, binImage0, 100, 255, CV_THRESH_BINARY_INV);
+
+        myTemplate.push_back(binImage0);
     }
 
     //按顺序取出和分割数字
@@ -240,14 +241,6 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jintArra
     }
 
     // ----------------------------------------
-
-    int size = w * h;
-    // 申请数组
-    jintArray result = env->NewIntArray(size);
-    // 数据复制到result数组
-    env->SetIntArrayRegion(result, 0, size, srcBuf);
-    // 释放C数组资源
-    env->ReleaseIntArrayElements(buf, srcBuf, 0);
-
-    return result;
+    std::string hello = "" + seq[0];
+    return env->NewStringUTF(hello.c_str());
 }

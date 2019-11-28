@@ -3,10 +3,8 @@ package com.ruixin.ndkstudy;
 import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
-import android.graphics.drawable.Drawable;
-import android.net.Uri;
 import android.os.Bundle;
-import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -34,35 +32,21 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Example of a call to a native method
-        final ImageView imageView = findViewById(R.id.imageView);
+        final TextView numberText = findViewById(R.id.numberText);
 
-        Drawable drawable = getResources().getDrawable(R.mipmap.number, getTheme());
-        final Bitmap bitmap = ((BitmapDrawable) drawable).getBitmap();
+        final Bitmap bitmap = getBitmap(R.mipmap.number);
 
-        int w = bitmap.getWidth();
-        int h = bitmap.getHeight();
-
-        int[] pixels = new int[w * h];
-
-        bitmap.getPixels(pixels, 0, w, 0, 0, w, h);
-
-        int[][] path = new int[10][80 * 80];
+        Bitmap[] pathBitmap = new Bitmap[10];
         for (int i = 0; i < 10; i++) {
-            Drawable drawable2 = getResources().getDrawable(numberId[i], getTheme());
-            final Bitmap bitmap2 = ((BitmapDrawable) drawable2).getBitmap();
-            int[] pixels2 = new int[80 * 80];
-            bitmap2.getPixels(pixels2, 0, 80, 0, 0, 80, 80);
-            path[i] = pixels2;
+            pathBitmap[i] = getBitmap(numberId[i]);
         }
 
-        int[] resultInt = JNIUtils.findNumber(pixels, w, h, path);
+        String name = JNIUtils.findNumber(bitmap, pathBitmap);
 
-        Bitmap resultImg = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
+        numberText.setText(name);
+    }
 
-        resultImg.setPixels(resultInt, 0, w, 0, 0, w, h);
-        //resultImg.setPixels(resultInt, 0, 80, 0, 0, 80, 80);
-
-        imageView.setImageBitmap(resultImg);
-
+    private Bitmap getBitmap(int id) {
+        return ((BitmapDrawable) getResources().getDrawable(id, getTheme())).getBitmap();
     }
 }

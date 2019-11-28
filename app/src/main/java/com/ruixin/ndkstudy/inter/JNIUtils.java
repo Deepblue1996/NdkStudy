@@ -1,5 +1,7 @@
 package com.ruixin.ndkstudy.inter;
 
+import android.graphics.Bitmap;
+
 public class JNIUtils {
 
     // Used to load the 'native-lib' library on application startup.
@@ -13,7 +15,5 @@ public class JNIUtils {
      */
     public static native int[] bitmap2Grey(int[] pixels, int w, int h);
 
-    public static native int[] findNumber(int[] pixels, int w, int h,
-                                          int[][] strLen
-    );
+    public static native String findNumber(Bitmap bitmap, Bitmap[] bitmapBuf);
 }
