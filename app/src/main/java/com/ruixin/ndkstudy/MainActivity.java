@@ -4,7 +4,8 @@ import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
-import android.util.Log;
+import android.widget.ImageView;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 
@@ -25,13 +26,16 @@ public class MainActivity extends AppCompatActivity {
             R.mipmap.num_9
     };
 
-    @SuppressLint("WrongThread")
+    @SuppressLint({"WrongThread", "SetTextI18n"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
         // Example of a call to a native method
+
+        ImageView imageView = findViewById(R.id.numberImg);
+        TextView text = findViewById(R.id.text);
 
         final Bitmap bitmap = newBitmap(R.mipmap.number);
 
@@ -42,7 +46,9 @@ public class MainActivity extends AppCompatActivity {
 
         String number = JNIUtils.findNumber(bitmap, pathBitmap);
 
-        Log.i("信息", number);
+        text.setText("分析:" + number);
+
+        imageView.setImageBitmap(bitmap);
     }
 
     private Bitmap newBitmap(int id) {

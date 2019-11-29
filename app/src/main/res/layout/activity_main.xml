@@ -8,9 +8,18 @@
     tools:context=".MainActivity">
 
     <ImageView
+        android:id="@+id/numberImg"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:scaleType="fitCenter"
         android:src="@mipmap/number" />
+
+    <TextView
+        android:textColor="@color/colorPrimary"
+        android:textStyle="bold"
+        android:textSize="20sp"
+        android:id="@+id/text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"/>
 
 </LinearLayout>

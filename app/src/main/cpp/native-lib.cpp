@@ -131,12 +131,53 @@ int getPiexSum(Mat &image) {
     return sum;
 }
 
+// 获取对比模块的边缘 Mat
+Mat getContours(Mat grayImage) {
+    Mat conImage = Mat::zeros(grayImage.size(), grayImage.type());
+    vector<vector<Point>> contours;
+    vector<Vec4i> hierarchy;
+    //指定CV_RETR_EXTERNAL寻找数字的外轮廓
+    findContours(grayImage, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
+    //绘制轮廓
+    drawContours(conImage, contours, -1, 255);
+
+    //将每个数字，分离开，保存到容器中
+    vector<myRect> sort_rect;
+    for (int i = 0; i < contours.size(); i++) {
+        //boundingRect返回轮廓的外接矩阵
+        Rect tempRect = boundingRect(contours[i]);
+        sort_rect.emplace_back(tempRect);
+    }
+
+    //对矩形进行排序，因为轮廓的顺序不一定是数字真正的顺序
+    for (int i = 0; i < sort_rect.size(); i++) {
+        for (int j = i + 1; j < sort_rect.size(); j++) {
+            if (sort_rect[j] < sort_rect[i]) {
+                myRect temp = sort_rect[j];
+                sort_rect[j] = sort_rect[i];
+                sort_rect[i] = temp;
+            }
+        }
+    }
+
+    // 分割打印
+    for (int k = 0; k < sort_rect.size(); k++) {
+        LOGD("子分割第%d个: x:%d y:%d w:%d h:%d", k, sort_rect[k].getRect().x, sort_rect[k].getRect().y,
+             sort_rect[k].getRect().width, sort_rect[k].getRect().height);
+    }
+
+    Mat ROI;
+    ROI = conImage(sort_rect[0].getRect());
+    Mat dstROI = Mat::zeros(grayImage.size(), grayImage.type());
+    resize(ROI, dstROI, grayImage.size(), 0, 0, INTER_NEAREST);
+    return dstROI;
+}
+
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject bitmap,
                                                    jobjectArray bitmapBuf) {
 
-    Mat imgData;//图片源矩阵
-    BitmapMatUtil::BitmapToMat(env, bitmap, imgData);//图片源矩阵初始化
+    Mat imgData = BitmapMatUtil::bitmap2Mat(env, bitmap);//图片源矩阵初始化
 
     //对图像进行处理，转化为灰度图然后再转为二值图
     Mat grayImage;
@@ -180,8 +221,6 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject 
              sort_rect[k].getRect().width, sort_rect[k].getRect().height);
     }
 
-    cvtColor(conImage, imgData, COLOR_GRAY2BGRA);
-
     // ----------------------------------------
 
     //加载模板
@@ -191,17 +230,23 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject 
 
         jobject srcBufTemp = env->GetObjectArrayElement(bitmapBuf, c);
 
-        Mat temp0;//图片源矩阵
-        BitmapMatUtil::BitmapToMat(env, srcBufTemp, temp0);//图片源矩阵初始化
-//
-//        Mat binImage0;
-//        //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
-//        //若为黑底白字则选择CV_THRESH_BINARY即可
-//        threshold(grayImage0, binImage0, 100, 255, CV_THRESH_BINARY_INV);
+        Mat temp0 = BitmapMatUtil::bitmap2Mat(env, srcBufTemp);//图片源矩阵初始化
 
-        myTemplate.push_back(temp0);
+        //对图像进行处理，转化为灰度图然后再转为二值图
+        Mat grayImage0;
+        cvtColor(temp0, grayImage0, COLOR_BGRA2GRAY);
+        Mat binImage0;
+        //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
+        //若为黑底白字则选择CV_THRESH_BINARY即可
+        threshold(grayImage0, binImage0, 100, 255, CV_THRESH_BINARY_INV);
+
+        Mat binImage1 = getContours(binImage0);
+
+        cvtColor(binImage1, temp0, COLOR_GRAY2BGRA);
+
+        myTemplate.push_back(binImage1);
     }
-/*
+
     //按顺序取出和分割数字
     vector<Mat> myROI;
     for (int i = 0; i < sort_rect.size(); i++) {
@@ -229,14 +274,21 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject 
             }
         }
         seq.push_back(min_seq);
-    }*/
+    }
 
-/*
+    char *string1 = (char *) malloc(seq.size());
+    memset(string1, 0, seq.size());
+
     //输出结果
     LOGD("识别结果为:");
     for (int i = 0; i < seq.size(); i++) {
         LOGD("%d", seq[i]);
-    }*/
+        sprintf(string1, "%s%d", string1, seq[i]);
+    }
 
-    return env->NewStringUTF("Hello JNI");
+    cvtColor(conImage, imgData, COLOR_GRAY2BGRA);
+
+    jstring encoding = (env)->NewStringUTF(string1);
+
+    return encoding;
 }
