@@ -14,9 +14,9 @@ using namespace cv;
 class BitmapMatUtil {
 
 public:
-    static Mat bitmap2Mat(JNIEnv *env, jobject bitmap);
+    static void BitmapToMat(JNIEnv *env, jobject& bitmap, Mat& mat);
 
-    static void mat2Bitmap(JNIEnv *env, Mat src, jobject bitmap);
+    static void MatToBitmap(JNIEnv *env, Mat& mat, jobject& bitmap);
 
 public:
     BitmapMatUtil();
