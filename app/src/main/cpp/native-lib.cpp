@@ -131,9 +131,9 @@ int getPiexSum(Mat &image) {
     return sum;
 }
 
-extern "C" JNIEXPORT jstring JNICALL
+extern "C" JNIEXPORT jobject JNICALL
 Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject bitmap,
-                                                   jobjectArray bitmapBuf) {
+                                                   jobjectArray bitmapBuf, jobject bitmapBuf2) {
 
     Mat imgData;//图片源矩阵
     imgData = BitmapMatUtil::bitmap2Mat(env, bitmap);//图片源矩阵初始化
@@ -194,17 +194,17 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject 
         Mat temp0;//图片源矩阵
         temp0 = BitmapMatUtil::bitmap2Mat(env, srcBufTemp);//图片源矩阵初始化
 
-        Mat grayImage0;
-        cvtColor(temp0, grayImage0, COLOR_BGRA2GRAY);
+//        Mat grayImage0;
+//        cvtColor(temp0, grayImage0, COLOR_BGRA2GRAY);
+//
+//        Mat binImage0;
+//        //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
+//        //若为黑底白字则选择CV_THRESH_BINARY即可
+//        threshold(grayImage0, binImage0, 100, 255, CV_THRESH_BINARY_INV);
 
-        Mat binImage0;
-        //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
-        //若为黑底白字则选择CV_THRESH_BINARY即可
-        threshold(grayImage0, binImage0, 100, 255, CV_THRESH_BINARY_INV);
-
-        myTemplate.push_back(binImage0);
+        myTemplate.push_back(temp0);
     }
-
+/*
     //按顺序取出和分割数字
     vector<Mat> myROI;
     for (int i = 0; i < sort_rect.size(); i++) {
@@ -232,15 +232,30 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject 
             }
         }
         seq.push_back(min_seq);
-    }
+    }*/
+/*
+    jclass bitmapCls = env->GetObjectClass(bitmap);
+    jobjectArray jDetRetArray = (jobjectArray) env->NewObjectArray(myTemplate.size(), bitmapCls, NULL);
 
+    for (int ind = 0; ind < myTemplate.size(); ind++) {
+
+        //Mat grayImage12;
+        //cvtColor(myTemplate[ind], grayImage12, COLOR_GRAY2BGRA);
+
+        jobject jDetRet;
+        BitmapMatUtil::mat2Bitmap(env, myTemplate[ind], jDetRet);
+
+        env->SetObjectArrayElement(jDetRetArray, ind, jDetRet);//在这里吧jDetRet放入了jDetRetArray
+    }*/
+
+    BitmapMatUtil::mat2Bitmap(env, myTemplate[0], bitmapBuf2);
+
+/*
     //输出结果
     LOGD("识别结果为:");
     for (int i = 0; i < seq.size(); i++) {
         LOGD("%d", seq[i]);
-    }
+    }*/
 
-    // ----------------------------------------
-    std::string hello = "" + seq[0];
-    return env->NewStringUTF(hello.c_str());
+    return bitmapBuf2;
 }

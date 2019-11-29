@@ -67,3 +67,4 @@ void BitmapMatUtil::mat2Bitmap(JNIEnv *env, Mat src, jobject bitmap) {
 
     AndroidBitmap_unlockPixels(env, bitmap);
 }
+

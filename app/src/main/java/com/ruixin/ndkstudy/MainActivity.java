@@ -4,6 +4,8 @@ import android.annotation.SuppressLint;
 import android.graphics.Bitmap;
 import android.graphics.drawable.BitmapDrawable;
 import android.os.Bundle;
+import android.util.Log;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
@@ -32,21 +34,40 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         // Example of a call to a native method
-        final TextView numberText = findViewById(R.id.numberText);
+        final ImageView imageView1 = findViewById(R.id.imageView1);
+        final ImageView imageView2 = findViewById(R.id.imageView2);
+        final ImageView imageView3 = findViewById(R.id.imageView3);
+        final ImageView imageView4 = findViewById(R.id.imageView4);
+        final ImageView imageView5 = findViewById(R.id.imageView5);
+        final ImageView imageView6 = findViewById(R.id.imageView6);
+        final ImageView imageView7 = findViewById(R.id.imageView7);
+        final ImageView imageView8 = findViewById(R.id.imageView8);
+        final ImageView imageView9 = findViewById(R.id.imageView9);
+        final ImageView imageView10 = findViewById(R.id.imageView10);
 
-        final Bitmap bitmap = getBitmap(R.mipmap.number);
+        final Bitmap bitmap = newBitmap(R.mipmap.number);
 
         Bitmap[] pathBitmap = new Bitmap[10];
         for (int i = 0; i < 10; i++) {
-            pathBitmap[i] = getBitmap(numberId[i]);
+            pathBitmap[i] = newBitmap(numberId[i]);
         }
 
-        String name = JNIUtils.findNumber(bitmap, pathBitmap);
+        Bitmap bitmaps = JNIUtils.findNumber(bitmap, pathBitmap, pathBitmap[0]);
 
-        numberText.setText(name);
+        imageView1.setImageBitmap(bitmaps);
+//        imageView2.setImageBitmap(bitmaps[1]);
+//        imageView3.setImageBitmap(bitmaps[2]);
+//        imageView4.setImageBitmap(bitmaps[3]);
+//        imageView5.setImageBitmap(bitmaps[4]);
+//        imageView6.setImageBitmap(bitmaps[5]);
+//        imageView7.setImageBitmap(bitmaps[6]);
+//        imageView8.setImageBitmap(bitmaps[7]);
+//        imageView9.setImageBitmap(bitmaps[8]);
+//        imageView10.setImageBitmap(bitmaps[9]);
     }
 
-    private Bitmap getBitmap(int id) {
-        return ((BitmapDrawable) getResources().getDrawable(id, getTheme())).getBitmap();
+    private Bitmap newBitmap(int id) {
+        Bitmap map = ((BitmapDrawable) getResources().getDrawable(id, getTheme())).getBitmap();
+        return map.copy(map.getConfig(), true);
     }
 }

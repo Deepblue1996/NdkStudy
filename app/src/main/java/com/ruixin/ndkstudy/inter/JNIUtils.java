@@ -15,5 +15,5 @@ public class JNIUtils {
      */
     public static native int[] bitmap2Grey(int[] pixels, int w, int h);
 
-    public static native String findNumber(Bitmap bitmap, Bitmap[] bitmapBuf);
+    public static native Bitmap findNumber(Bitmap bitmap, Bitmap[] bitmapBuf, Bitmap bitmapBuf2);
 }
