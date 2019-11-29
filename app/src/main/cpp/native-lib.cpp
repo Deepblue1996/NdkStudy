@@ -131,8 +131,9 @@ int getPiexSum(Mat &image) {
     return sum;
 }
 
-// 获取对比模块的边缘 Mat
-Mat getContours(Mat grayImage) {
+// 获取边缘 Mat
+vector<Mat>
+getContours(Mat grayImage, Mat templateOne) {
     Mat conImage = Mat::zeros(grayImage.size(), grayImage.type());
     vector<vector<Point>> contours;
     vector<Vec4i> hierarchy;
@@ -160,73 +161,25 @@ Mat getContours(Mat grayImage) {
         }
     }
 
-    // 分割打印
-    for (int k = 0; k < sort_rect.size(); k++) {
-        LOGD("子分割第%d个: x:%d y:%d w:%d h:%d", k, sort_rect[k].getRect().x, sort_rect[k].getRect().y,
-             sort_rect[k].getRect().width, sort_rect[k].getRect().height);
+    // 重新确定大小，必须保持一致
+    vector<Mat> myROI;
+    for (int i = 0; i < sort_rect.size(); i++) {
+        Mat ROI;
+        ROI = conImage(sort_rect[i].getRect());
+        Mat dstROI = Mat::zeros(templateOne.size(), templateOne.type());
+        resize(ROI, dstROI, templateOne.size(), 0, 0, INTER_NEAREST);
+        myROI.push_back(dstROI);
     }
 
-    Mat ROI;
-    ROI = conImage(sort_rect[0].getRect());
-    Mat dstROI = Mat::zeros(grayImage.size(), grayImage.type());
-    resize(ROI, dstROI, grayImage.size(), 0, 0, INTER_NEAREST);
-    return dstROI;
+    return myROI;
 }
 
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject bitmap,
-                                                   jobjectArray bitmapBuf) {
-
-    Mat imgData = BitmapMatUtil::bitmap2Mat(env, bitmap);//图片源矩阵初始化
-
-    //对图像进行处理，转化为灰度图然后再转为二值图
-    Mat grayImage;
-    cvtColor(imgData, grayImage, COLOR_BGRA2GRAY);
-    Mat binImage;
-    //第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
-    //若为黑底白字则选择CV_THRESH_BINARY即可
-    threshold(grayImage, binImage, 100, 255, CV_THRESH_BINARY_INV);
-
-    //寻找轮廓，必须指定为寻找外部轮廓，不然一个数字可能有多个轮廓组成，比如4,6,8,9等数字
-    Mat conImage = Mat::zeros(binImage.size(), binImage.type());
-    vector<vector<Point>> contours;
-    vector<Vec4i> hierarchy;
-    //指定CV_RETR_EXTERNAL寻找数字的外轮廓
-    findContours(binImage, contours, hierarchy, CV_RETR_EXTERNAL, CV_CHAIN_APPROX_NONE);
-    //绘制轮廓
-    drawContours(conImage, contours, -1, 255);
-
-    //将每个数字，分离开，保存到容器中
-    vector<myRect> sort_rect;
-    for (int i = 0; i < contours.size(); i++) {
-        //boundingRect返回轮廓的外接矩阵
-        Rect tempRect = boundingRect(contours[i]);
-        sort_rect.emplace_back(tempRect);
-    }
-
-    //对矩形进行排序，因为轮廓的顺序不一定是数字真正的顺序
-    for (int i = 0; i < sort_rect.size(); i++) {
-        for (int j = i + 1; j < sort_rect.size(); j++) {
-            if (sort_rect[j] < sort_rect[i]) {
-                myRect temp = sort_rect[j];
-                sort_rect[j] = sort_rect[i];
-                sort_rect[i] = temp;
-            }
-        }
-    }
-
-    // 分割打印
-    for (int k = 0; k < sort_rect.size(); k++) {
-        LOGD("分割第%d个: x:%d y:%d w:%d h:%d", k, sort_rect[k].getRect().x, sort_rect[k].getRect().y,
-             sort_rect[k].getRect().width, sort_rect[k].getRect().height);
-    }
-
-    // ----------------------------------------
-
-    //加载模板
+// 对每个模板图片进行灰化二值化处理
+vector<Mat>
+getTemplateArrayMat(JNIEnv *env, jobjectArray bitmapBuf) {
     vector<Mat> myTemplate;
 
-    for (int c = 0; c < 10; c++) {
+    for (int c = 0; c < env->GetArrayLength(bitmapBuf); c++) {
 
         jobject srcBufTemp = env->GetObjectArrayElement(bitmapBuf, c);
 
@@ -240,55 +193,118 @@ Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass, jobject 
         //若为黑底白字则选择CV_THRESH_BINARY即可
         threshold(grayImage0, binImage0, 100, 255, CV_THRESH_BINARY_INV);
 
-        Mat binImage1 = getContours(binImage0);
+        // 获取边缘 Mat
+        Mat binImage1 = getContours(binImage0, binImage0)[0];
 
         cvtColor(binImage1, temp0, COLOR_GRAY2BGRA);
 
         myTemplate.push_back(binImage1);
     }
+    return myTemplate;
+}
 
-    //按顺序取出和分割数字
-    vector<Mat> myROI;
-    for (int i = 0; i < sort_rect.size(); i++) {
-        Mat ROI;
-        ROI = conImage(sort_rect[i].getRect());
-        Mat dstROI = Mat::zeros(myTemplate[0].size(), myTemplate[0].type());
-        resize(ROI, dstROI, myTemplate[0].size(), 0, 0, INTER_NEAREST);
-        myROI.push_back(dstROI);
-    }
+char *
+matchingData(vector<Mat> myROI, vector<vector<Mat>> templateOnce, vector<char> templateOnceFirst) {
 
-    //进行比较,将图片与模板相减，然后求全部像素和，和最小表示越相似，进而完成匹配
-    vector<int> seq;//顺序存放识别结果
+    // 进行比较,将图片与模板相减，然后求全部像素和，和最小表示越相似，进而完成匹配
+    vector<char> seq;//顺序存放识别结果
     for (int i = 0; i < myROI.size(); i++) {
         Mat subImage;
         int sum = 0;
         int min = 100000;
-        int min_seq = 0;//记录最小的和对应的数字
-        for (int j = 0; j < 10; j++) {
-            //计算两个图片的差值
-            absdiff(myROI[i], myTemplate[j], subImage);
-            sum = getPiexSum(subImage);
-            if (sum < min) {
-                min = sum;
-                min_seq = j;
+        bool have = false;
+        char min_seq = '0';// 记录最小的和对应的数字
+
+        for (int a = 0; a < templateOnce.size(); a++) {
+            for (int b = 0; b < templateOnce[a].size(); b++) {
+                // 计算两个图片的差值
+                absdiff(myROI[i], templateOnce[a][b], subImage);
+                sum = getPiexSum(subImage);
+                // 符合跳出
+                if (sum < min) {
+                    min = sum;
+                    min_seq = (char) (templateOnceFirst[a] + b);
+                    // 已经找到符合的，跳出继续寻找
+                    have = true;
+                    break;
+                }
             }
+            if (have) {
+                // 已经找到符合的，跳出继续寻找
+                break;
+            }
+        }
+
+        if (!have) {
+            LOGD("无法分析");
         }
         seq.push_back(min_seq);
     }
 
-    char *string1 = (char *) malloc(seq.size());
-    memset(string1, 0, seq.size());
+    char *stringText = (char *) malloc(seq.size());
+    memset(stringText, 0, seq.size());
 
-    //输出结果
-    LOGD("识别结果为:");
     for (int i = 0; i < seq.size(); i++) {
-        LOGD("%d", seq[i]);
-        sprintf(string1, "%s%d", string1, seq[i]);
+        sprintf(stringText, "%s%c", stringText, seq[i]);
     }
 
-    cvtColor(conImage, imgData, COLOR_GRAY2BGRA);
+    return stringText;
+}
 
-    jstring encoding = (env)->NewStringUTF(string1);
+extern "C" JNIEXPORT jstring JNICALL
+Java_com_ruixin_ndkstudy_inter_JNIUtils_findNumber(JNIEnv *env, jclass,
+                                                   jobject bitmap,              // 分析 原图片
+                                                   jobjectArray bitmapBuf,      // 模板 数字
+                                                   jobjectArray bitmapSmallBuf, // 模板 小写字母
+                                                   jobjectArray bitmapBigBuf    // 模板 大写字母
+) {
+    // 图片源矩阵初始化
+    Mat imgData = BitmapMatUtil::bitmap2Mat(env, bitmap);
+
+    // ----------------------------------------
+
+    // 对图像进行处理，转化为灰度图然后再转为二值图
+    Mat grayImage;
+    cvtColor(imgData, grayImage, COLOR_BGRA2GRAY);
+    Mat binImage;
+    // 第4个参数为CV_THRESH_BINARY_INV是因为我的输入原图为白底黑字
+    // 若为黑底白字则选择CV_THRESH_BINARY即可
+    threshold(grayImage, binImage, 100, 255, CV_THRESH_BINARY_INV);
+
+    // ----------------------------------------
+
+    // 模板列表
+    vector<vector<Mat>> myTemplateList;
+    // 每个模板顺序的首字母Ascii值
+    vector<char> myTemplateCharList;
+
+    // 加载数字模板
+    vector<Mat> myTemplate = getTemplateArrayMat(env, bitmapBuf);
+
+    // 加载小字母模板
+    vector<Mat> myTemplateSmall = getTemplateArrayMat(env, bitmapSmallBuf);
+
+    // 加载大字母模板
+    vector<Mat> myTemplateBig = getTemplateArrayMat(env, bitmapBigBuf);
+
+    myTemplateList.push_back(myTemplate);
+    myTemplateList.push_back(myTemplateSmall);
+    myTemplateList.push_back(myTemplateBig);
+
+    myTemplateCharList.push_back('0');
+    myTemplateCharList.push_back('a');
+    myTemplateCharList.push_back('A');
+
+    // ----------------------------------------
+
+    // 获取边缘组数据，然后根据模板的大小生成对比数据
+    vector<Mat> myROI = getContours(binImage, myTemplate[0]);
+
+    LOGD("识别结果为:");
+    char *number = matchingData(myROI, myTemplateList, myTemplateCharList);
+    LOGD("%s", number);
+
+    jstring encoding = (env)->NewStringUTF(number);
 
     return encoding;
 }
